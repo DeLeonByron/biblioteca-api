@@ -2,7 +2,7 @@ const { google } = require('googleapis');
 const jwt = require('jsonwebtoken');
 
 const SHEET_NAME = 'UsuariosTemporales';
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+const SPREADSHEET_ID = '16O35yDL1nUwNBMEBYMUYONYS6iAXOdfBRrKr_nLg-PM';
 const SECRET_KEY = process.env.JWT_SECRET || 'bibliotecaVirtual';
 
 console.log('🔍 [googleSheets] Inicializando módulo...');
