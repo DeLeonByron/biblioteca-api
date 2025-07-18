@@ -6,7 +6,7 @@ const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: ADMIN_EMAIL,
-    pass: 'TU_APP_PASSWORD', // Usa una App Password de Gmail
+    pass: 'Ingeniero.18', // Usa una App Password de Gmail
   },
 });
 
@@ -15,7 +15,7 @@ async function sendAdminNotification(email) {
     El usuario ${email} ha solicitado acceso temporal a la biblioteca.
 
     Autorizar acceso:
-    http://TU_DOMINIO/autorizar?email=${encodeURIComponent(email)}
+    https://biblioteca-api-production-e0fd.up.railway.app//autorizar?email=${encodeURIComponent(email)}
   `;
 
   await transporter.sendMail({
