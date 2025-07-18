@@ -51,23 +51,32 @@ async function verifyGoogleAuth() {
 // --- Funciones para manipular Google Sheets ---
 async function getSheetData() {
   console.log('📄 [googleSheets] Leyendo datos de la hoja...');
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: SHEET_NAME,
-  });
-  console.log(`📄 [googleSheets] ${res.data.values?.length || 0} filas obtenidas`);
-  return res.data.values;
+  console.log('ℹ️ [googleSheets] SPREADSHEET_ID:', SPREADSHEET_ID);
+  console.log('ℹ️ [googleSheets] Sheet Name:', SHEET_NAME);
+  console.log('ℹ️ [googleSheets] Client Email:', rawCredentials.client_email);
+
+  try {
+    // Verificar que el JWT realmente se pueda usar antes de la llamada
+    await auth.authorize();
+    console.log('✅ [googleSheets] Autenticación previa OK, ahora llamando a Sheets API...');
+  } catch (authErr) {
+    console.error('❌ [googleSheets] Falla al autorizar con Google:', authErr.message);
+    throw authErr;
+  }
+
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: SHEET_NAME,
+    });
+    console.log('✅ [googleSheets] Datos obtenidos correctamente.');
+    return res.data.values;
+  } catch (err) {
+    console.error('❌ [googleSheets] Error al leer la hoja:', err.message);
+    throw err;
+  }
 }
 
-async function updateSheet(range, values) {
-  console.log(`✏️ [googleSheets] Actualizando rango ${range} con valores:`, values);
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range,
-    valueInputOption: 'RAW',
-    requestBody: { values },
-  });
-}
 
 async function appendRow(values) {
   console.log('➕ [googleSheets] Insertando nueva fila:', values);
