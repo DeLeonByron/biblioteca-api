@@ -3,17 +3,25 @@ const { google } = require('googleapis');
 const jwt = require('jsonwebtoken');
 
 const SHEET_NAME = 'UsuariosTemporales';
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID; // ID de la hoja de cálculo
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const SECRET_KEY = process.env.JWT_SECRET || 'bibliotecaVirtual';
 
-// Leemos las credenciales desde la variable de entorno
-const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+// Parsea las credenciales de Google (desde variable de entorno en Railway)
+const rawCredentials = process.env.GOOGLE_CREDENTIALS
+  ? JSON.parse(process.env.GOOGLE_CREDENTIALS)
+  : null;
+
+// Si el private_key tiene "\n" escapados, los reemplazamos por saltos reales
+if (rawCredentials && rawCredentials.private_key) {
+  rawCredentials.private_key = rawCredentials.private_key.replace(/\\n/g, '\n');
+}
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
+
 const auth = new google.auth.JWT(
-  credentials.client_email,
+  rawCredentials.client_email,
   null,
-  credentials.private_key,
+  rawCredentials.private_key,
   SCOPES
 );
 
