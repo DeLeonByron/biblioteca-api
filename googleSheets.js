@@ -6,18 +6,23 @@ const SHEET_NAME = 'UsuariosTemporales';
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const SECRET_KEY = process.env.JWT_SECRET || 'bibliotecaVirtual';
 
-// Parsea las credenciales de Google (desde variable de entorno en Railway)
-const rawCredentials = process.env.GOOGLE_CREDENTIALS
-  ? JSON.parse(process.env.GOOGLE_CREDENTIALS)
-  : null;
+// --- Manejo seguro de credenciales (Railway/Render) ---
+if (!process.env.GOOGLE_CREDENTIALS) {
+  throw new Error('La variable de entorno GOOGLE_CREDENTIALS no está definida');
+}
 
-// Si el private_key tiene "\n" escapados, los reemplazamos por saltos reales
-if (rawCredentials && rawCredentials.private_key) {
-  rawCredentials.private_key = rawCredentials.private_key.replace(/\\n/g, '\n');
+let rawCredentials;
+try {
+  rawCredentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+  // Reemplazar \n escapados por saltos de línea reales
+  if (rawCredentials.private_key) {
+    rawCredentials.private_key = rawCredentials.private_key.replace(/\\n/g, '\n');
+  }
+} catch (err) {
+  throw new Error('Error al parsear GOOGLE_CREDENTIALS: ' + err.message);
 }
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
-
 const auth = new google.auth.JWT(
   rawCredentials.client_email,
   null,
@@ -27,7 +32,7 @@ const auth = new google.auth.JWT(
 
 const sheets = google.sheets({ version: 'v4', auth });
 
-// Obtener datos de la hoja
+// --- Funciones auxiliares para manipular Google Sheets ---
 async function getSheetData() {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -36,7 +41,6 @@ async function getSheetData() {
   return res.data.values;
 }
 
-// Actualizar celdas
 async function updateSheet(range, values) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
@@ -46,7 +50,6 @@ async function updateSheet(range, values) {
   });
 }
 
-// Agregar fila nueva
 async function appendRow(values) {
   await sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
@@ -56,10 +59,9 @@ async function appendRow(values) {
   });
 }
 
-// Verificar si el correo ya tiene acceso
+// --- Lógica de negocio ---
 async function checkEmailAccess(email) {
   const data = await getSheetData();
-
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     if (row[0] === email) {
@@ -78,7 +80,6 @@ async function checkEmailAccess(email) {
   return { success: false, message: 'No autorizado' };
 }
 
-// Autorizar usuario y generar token
 async function authorizeUser(email) {
   const token = jwt.sign({ sub: email }, SECRET_KEY, { expiresIn: '30m' });
   const expira = new Date(Date.now() + 30 * 60000).toISOString();
@@ -99,7 +100,6 @@ async function authorizeUser(email) {
   return { success: true, token };
 }
 
-// Validar token
 async function validateToken(token) {
   try {
     jwt.verify(token, SECRET_KEY);
@@ -122,7 +122,6 @@ async function validateToken(token) {
   return { success: false, message: 'Token no encontrado' };
 }
 
-// Marcar token como usado
 async function markTokenUsed(token) {
   const data = await getSheetData();
   for (let i = 1; i < data.length; i++) {
