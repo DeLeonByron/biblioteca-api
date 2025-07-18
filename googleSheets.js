@@ -1,12 +1,13 @@
+// googleSheets.js
 const { google } = require('googleapis');
-const fs = require('fs');
 const jwt = require('jsonwebtoken');
-const path = require('path');
 
 const SHEET_NAME = 'UsuariosTemporales';
-const SPREADSHEET_ID = '16O35yDL1nUwNBMEBYMUYONYS6iAXOdfBRrKr_nLg-PM'; // <-- Coloca el ID de tu hoja
-const SECRET_KEY = 'bibliotecaVirtual';
-const credentials = JSON.parse(fs.readFileSync(path.join(__dirname, 'credentials.json')));
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID; // ID de la hoja de cálculo
+const SECRET_KEY = process.env.JWT_SECRET || 'bibliotecaVirtual';
+
+// Leemos las credenciales desde la variable de entorno
+const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 const auth = new google.auth.JWT(
@@ -18,6 +19,7 @@ const auth = new google.auth.JWT(
 
 const sheets = google.sheets({ version: 'v4', auth });
 
+// Obtener datos de la hoja
 async function getSheetData() {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -26,15 +28,17 @@ async function getSheetData() {
   return res.data.values;
 }
 
+// Actualizar celdas
 async function updateSheet(range, values) {
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: range,
+    range,
     valueInputOption: 'RAW',
     requestBody: { values },
   });
 }
 
+// Agregar fila nueva
 async function appendRow(values) {
   await sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
@@ -44,7 +48,7 @@ async function appendRow(values) {
   });
 }
 
-// Verifica si el correo ya tiene acceso
+// Verificar si el correo ya tiene acceso
 async function checkEmailAccess(email) {
   const data = await getSheetData();
 
@@ -57,16 +61,16 @@ async function checkEmailAccess(email) {
       const usado = row[5] === 'TRUE';
 
       if (!estado || usado || expira < new Date()) {
-        return { success: false, message: "No autorizado o token expirado" };
+        return { success: false, message: 'No autorizado o token expirado' };
       }
 
       return { success: true, token };
     }
   }
-  return { success: false, message: "No autorizado" };
+  return { success: false, message: 'No autorizado' };
 }
 
-// Autoriza usuario
+// Autorizar usuario y generar token
 async function authorizeUser(email) {
   const token = jwt.sign({ sub: email }, SECRET_KEY, { expiresIn: '30m' });
   const expira = new Date(Date.now() + 30 * 60000).toISOString();
@@ -92,7 +96,7 @@ async function validateToken(token) {
   try {
     jwt.verify(token, SECRET_KEY);
   } catch {
-    return { success: false, message: "Token inválido o expirado" };
+    return { success: false, message: 'Token inválido o expirado' };
   }
 
   const data = await getSheetData();
@@ -102,15 +106,15 @@ async function validateToken(token) {
       const estado = data[i][4] === 'TRUE';
       const usado = data[i][5] === 'TRUE';
       if (!estado || usado || expira < new Date()) {
-        return { success: false, message: "Token inválido o expirado" };
+        return { success: false, message: 'Token inválido o expirado' };
       }
       return { success: true, email: data[i][0] };
     }
   }
-  return { success: false, message: "Token no encontrado" };
+  return { success: false, message: 'Token no encontrado' };
 }
 
-// Marcar token usado
+// Marcar token como usado
 async function markTokenUsed(token) {
   const data = await getSheetData();
   for (let i = 1; i < data.length; i++) {
@@ -119,7 +123,7 @@ async function markTokenUsed(token) {
       return { success: true };
     }
   }
-  return { success: false, message: "Token no encontrado" };
+  return { success: false, message: 'Token no encontrado' };
 }
 
 module.exports = { checkEmailAccess, authorizeUser, validateToken, markTokenUsed };
