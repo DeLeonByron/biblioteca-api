@@ -54,6 +54,9 @@ async function getSheetData() {
   console.log('ℹ️ [googleSheets] SPREADSHEET_ID:', SPREADSHEET_ID);
   console.log('ℹ️ [googleSheets] Sheet Name:', SHEET_NAME);
   console.log('ℹ️ [googleSheets] Client Email:', rawCredentials.client_email);
+  console.log('🔍 Longitud GOOGLE_CREDENTIALS:', process.env.GOOGLE_CREDENTIALS?.length);
+  console.log('🔍 Contiene BEGIN PRIVATE KEY?:', process.env.GOOGLE_CREDENTIALS?.includes('PRIVATE KEY'));
+
 
   try {
     // Verificar que el JWT realmente se pueda usar antes de la llamada
