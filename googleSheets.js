@@ -1,5 +1,6 @@
 const { google } = require('googleapis');
 const jwt = require('jsonwebtoken');
+const https = require('https');
 
 const SHEET_NAME = 'UsuariosTemporales';
 const SPREADSHEET_ID = '16O35yDL1nUwNBMEBYMUYONYS6iAXOdfBRrKr_nLg-PM';
@@ -37,22 +38,18 @@ const auth = new google.auth.JWT(
 
 const sheets = google.sheets({ version: 'v4', auth });
 
-// --- Test de conexión inicial (debug) ---
-async function testConnection() {
-  console.log('🔍 [googleSheets] Probando conexión con Google Sheets...');
-  try {
-    await auth.authorize();
-    console.log('✅ [googleSheets] Autenticación con Google exitosa.');
-    const res = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
-    console.log('✅ [googleSheets] Conexión a hoja exitosa. Título:', res.data.properties.title);
-  } catch (err) {
-    console.error('❌ [googleSheets] Error probando conexión:', err.message);
-    console.error('📄 Stack:', err.stack);
-  }
+// --- Test de red (para saber si Railway bloquea conexiones salientes) ---
+async function testNetwork() {
+  return new Promise((resolve) => {
+    https.get('https://www.googleapis.com', (res) => {
+      console.log(`🌐 [testNetwork] Conexión a googleapis.com: ${res.statusCode}`);
+      resolve(true);
+    }).on('error', (err) => {
+      console.error('❌ [testNetwork] Error de red:', err.code || err.message);
+      resolve(false);
+    });
+  });
 }
-
-// Llamar test al cargar (para debug)
-testConnection();
 
 // --- Verificación de autenticación ---
 async function verifyGoogleAuth() {
@@ -63,6 +60,7 @@ async function verifyGoogleAuth() {
     return { success: true };
   } catch (err) {
     console.error('❌ [googleSheets] Error en auth.authorize():', err.message);
+    console.error('🔍 Código:', err.code);
     console.error('📄 Stack:', err.stack);
     return { success: false, error: err.message };
   }
@@ -75,15 +73,24 @@ async function getSheetData() {
   console.log('ℹ️ Sheet Name:', SHEET_NAME);
   console.log('ℹ️ Client Email:', rawCredentials.client_email);
 
+  // --- Verificar red antes de continuar ---
+  const canConnect = await testNetwork();
+  if (!canConnect) {
+    throw new Error('❌ [googleSheets] No hay conexión desde Railway hacia googleapis.com (posible bloqueo de red)');
+  }
+
+  // --- Autenticación con Google ---
   try {
     await auth.authorize();
     console.log('✅ [googleSheets] Autenticación previa OK, ahora llamando a Sheets API...');
   } catch (authErr) {
     console.error('❌ [googleSheets] Falla al autorizar con Google:', authErr.message);
+    console.error('🔍 Código:', authErr.code);
     console.error('📄 Stack:', authErr.stack);
     throw authErr;
   }
 
+  // --- Obtener datos de la hoja ---
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
@@ -93,6 +100,7 @@ async function getSheetData() {
     return res.data.values;
   } catch (err) {
     console.error('❌ [googleSheets] Error al leer la hoja:', err.message);
+    console.error('🔍 Código:', err.code);
     console.error('📄 Stack:', err.stack);
     throw err;
   }
