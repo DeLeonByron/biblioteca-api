@@ -1,6 +1,8 @@
 const { google } = require('googleapis');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const SHEET_NAME = 'UsuariosTemporales';
 const SPREADSHEET_ID = '16O35yDL1nUwNBMEBYMUYONYS6iAXOdfBRrKr_nLg-PM';
@@ -13,55 +15,46 @@ if (!process.env.GOOGLE_CREDENTIALS) {
   throw new Error('❌ GOOGLE_CREDENTIALS no está definida en el entorno');
 }
 
-let rawCredentials;
+// Ruta para guardar el JSON temporalmente (dentro del contenedor)
+const credsPath = path.join(__dirname, 'service-account.json');
+
 try {
-  rawCredentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-  if (rawCredentials.private_key) {
-    rawCredentials.private_key = rawCredentials.private_key.replace(/\\n/g, '\n');
-  }
-  console.log('✅ [googleSheets] Credenciales parseadas correctamente.');
+  // Escribir el archivo desde la variable (limpiando los saltos de línea)
+  fs.writeFileSync(
+    credsPath,
+    process.env.GOOGLE_CREDENTIALS.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n')
+  );
+  console.log('✅ [googleSheets] Archivo service-account.json generado en runtime.');
 } catch (err) {
-  console.error('❌ [googleSheets] Error al parsear GOOGLE_CREDENTIALS:', err.message);
+  console.error('❌ [googleSheets] No se pudo crear service-account.json:', err.message);
   throw err;
 }
 
+// --- Inicializar GoogleAuth usando el archivo ---
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
-const auth = new google.auth.JWT(
-  rawCredentials.client_email,
-  null,
-  rawCredentials.private_key,
-  SCOPES
-);
-
+const auth = new google.auth.GoogleAuth({
+  keyFile: credsPath,
+  scopes: SCOPES,
+});
 const sheets = google.sheets({ version: 'v4', auth });
 
 // --- Funciones para validaciones extra ---
 function validatePrivateKey() {
   console.log('🔍 [debug] Validando estructura de la clave privada...');
-  const pk = rawCredentials.private_key || '';
-  console.log('   - Tiene encabezado BEGIN?:', pk.startsWith('-----BEGIN PRIVATE KEY-----'));
-  console.log('   - Tiene pie END?:', pk.trim().endsWith('-----END PRIVATE KEY-----'));
-
-  try {
-    const sign = crypto.createSign('RSA-SHA256');
-    sign.update('test');
-    sign.sign(pk);
-    console.log('✅ [debug] La clave privada puede firmar (válida).');
-    return true;
-  } catch (err) {
-    console.error('❌ [debug] La clave privada NO puede firmar:', err.message);
-    return false;
-  }
+  const pk = process.env.GOOGLE_CREDENTIALS || '';
+  console.log('   - Tiene encabezado BEGIN?:', pk.includes('-----BEGIN PRIVATE KEY-----'));
+  console.log('   - Tiene pie END?:', pk.includes('-----END PRIVATE KEY-----'));
 }
 
 async function testAuth() {
   console.log('🔍 [debug] Probando autorización JWT con Google...');
   try {
-    await auth.authorize();
-    console.log('✅ [debug] Autorización con Google OK.');
+    const client = await auth.getClient();
+    await client.getAccessToken(); // Fuerza la solicitud de token
+    console.log('✅ [debug] Autenticación con Google OK.');
     return true;
   } catch (err) {
-    console.error('❌ [debug] Falla en auth.authorize():', err.message);
+    console.error('❌ [debug] Falla en autenticación con Google:', err.message);
     console.error('📄 Stack:', err.stack);
     return false;
   }
@@ -72,23 +65,15 @@ async function getSheetData() {
   console.log('📄 [googleSheets] Leyendo datos de la hoja...');
   console.log('ℹ️ Spreadsheet ID:', SPREADSHEET_ID);
   console.log('ℹ️ Sheet Name:', SHEET_NAME);
-  console.log('ℹ️ Client Email:', rawCredentials.client_email);
 
-  // Validar clave y firma ANTES de llamar a Google
-  const keyValid = validatePrivateKey();
-  if (!keyValid) {
-    console.error('❌ [googleSheets] La clave privada parece inválida. Deteniendo.');
-    throw new Error('Clave privada inválida: no se puede firmar JWT.');
-  }
+  validatePrivateKey();
 
-  // Verificar que el JWT de auth sea aceptado
   const authValid = await testAuth();
   if (!authValid) {
-    console.error('❌ [googleSheets] No se pudo autenticar con Google. Revisar JWT o credenciales.');
+    console.error('❌ [googleSheets] No se pudo autenticar con Google. Revisar credenciales.');
     throw new Error('Autenticación con Google fallida.');
   }
 
-  // Si todo está bien, hacemos la llamada real a Sheets API
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
@@ -194,5 +179,5 @@ module.exports = {
   authorizeUser,
   validateToken,
   markTokenUsed,
-  getSheetData // exportamos para ser usado en index.js
+  getSheetData, // exportamos para usar desde index.js
 };
