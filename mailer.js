@@ -1,29 +1,38 @@
 const nodemailer = require('nodemailer');
 
 const ADMIN_EMAIL = 'byron16garcia@gmail.com';
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD; // App Password de Google
 
+// --- Configuración del transporte de correo ---
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: ADMIN_EMAIL,
-    pass: 'Ingeniero.18', // Usa una App Password de Gmail
+    pass: GMAIL_APP_PASSWORD, // Aquí va la App Password, no tu clave real
   },
 });
 
+// --- Función para notificar al administrador ---
 async function sendAdminNotification(email) {
   const message = `
     El usuario ${email} ha solicitado acceso temporal a la biblioteca.
 
     Autorizar acceso:
-    https://biblioteca-api-production-e0fd.up.railway.app//autorizar?email=${encodeURIComponent(email)}
+    https://biblioteca-api-production-e0fd.up.railway.app/autorizar?email=${encodeURIComponent(email)}
   `;
 
-  await transporter.sendMail({
-    from: ADMIN_EMAIL,
-    to: ADMIN_EMAIL,
-    subject: 'Solicitud de acceso temporal',
-    text: message,
-  });
+  try {
+    await transporter.sendMail({
+      from: ADMIN_EMAIL,
+      to: ADMIN_EMAIL,
+      subject: 'Solicitud de acceso temporal',
+      text: message,
+    });
+    console.log(`✅ Notificación enviada al administrador para ${email}`);
+  } catch (err) {
+    console.error('❌ Error enviando correo al administrador:', err.message);
+    throw err;
+  }
 }
 
 module.exports = { sendAdminNotification };
