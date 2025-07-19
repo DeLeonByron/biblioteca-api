@@ -1,6 +1,6 @@
 const { google } = require('googleapis');
 const jwt = require('jsonwebtoken');
-const https = require('https');
+const crypto = require('crypto');
 
 const SHEET_NAME = 'UsuariosTemporales';
 const SPREADSHEET_ID = '16O35yDL1nUwNBMEBYMUYONYS6iAXOdfBRrKr_nLg-PM';
@@ -20,9 +20,6 @@ try {
     rawCredentials.private_key = rawCredentials.private_key.replace(/\\n/g, '\n');
   }
   console.log('✅ [googleSheets] Credenciales parseadas correctamente.');
-  console.log('ℹ️ Client Email:', rawCredentials.client_email);
-  console.log('🔍 Longitud GOOGLE_CREDENTIALS:', process.env.GOOGLE_CREDENTIALS?.length);
-  console.log('🔍 Contiene BEGIN PRIVATE KEY?:', process.env.GOOGLE_CREDENTIALS?.includes('PRIVATE KEY'));
 } catch (err) {
   console.error('❌ [googleSheets] Error al parsear GOOGLE_CREDENTIALS:', err.message);
   throw err;
@@ -38,59 +35,60 @@ const auth = new google.auth.JWT(
 
 const sheets = google.sheets({ version: 'v4', auth });
 
-// --- Test de red (para saber si Railway bloquea conexiones salientes) ---
-async function testNetwork() {
-  return new Promise((resolve) => {
-    https.get('https://www.googleapis.com', (res) => {
-      console.log(`🌐 [testNetwork] Conexión a googleapis.com: ${res.statusCode}`);
-      resolve(true);
-    }).on('error', (err) => {
-      console.error('❌ [testNetwork] Error de red:', err.code || err.message);
-      resolve(false);
-    });
-  });
-}
+// --- Funciones para validaciones extra ---
+function validatePrivateKey() {
+  console.log('🔍 [debug] Validando estructura de la clave privada...');
+  const pk = rawCredentials.private_key || '';
+  console.log('   - Tiene encabezado BEGIN?:', pk.startsWith('-----BEGIN PRIVATE KEY-----'));
+  console.log('   - Tiene pie END?:', pk.trim().endsWith('-----END PRIVATE KEY-----'));
 
-// --- Verificación de autenticación ---
-async function verifyGoogleAuth() {
-  console.log('🔍 [googleSheets] Probando autenticación con Google...');
   try {
-    await auth.authorize();
-    console.log('✅ [googleSheets] Autenticación exitosa.');
-    return { success: true };
+    const sign = crypto.createSign('RSA-SHA256');
+    sign.update('test');
+    sign.sign(pk);
+    console.log('✅ [debug] La clave privada puede firmar (válida).');
+    return true;
   } catch (err) {
-    console.error('❌ [googleSheets] Error en auth.authorize():', err.message);
-    console.error('🔍 Código:', err.code);
-    console.error('📄 Stack:', err.stack);
-    return { success: false, error: err.message };
+    console.error('❌ [debug] La clave privada NO puede firmar:', err.message);
+    return false;
   }
 }
 
-// --- Funciones para manipular Google Sheets ---
+async function testAuth() {
+  console.log('🔍 [debug] Probando autorización JWT con Google...');
+  try {
+    await auth.authorize();
+    console.log('✅ [debug] Autorización con Google OK.');
+    return true;
+  } catch (err) {
+    console.error('❌ [debug] Falla en auth.authorize():', err.message);
+    console.error('📄 Stack:', err.stack);
+    return false;
+  }
+}
+
+// --- Funciones principales ---
 async function getSheetData() {
   console.log('📄 [googleSheets] Leyendo datos de la hoja...');
-  console.log('ℹ️ SPREADSHEET_ID:', SPREADSHEET_ID);
+  console.log('ℹ️ Spreadsheet ID:', SPREADSHEET_ID);
   console.log('ℹ️ Sheet Name:', SHEET_NAME);
   console.log('ℹ️ Client Email:', rawCredentials.client_email);
 
-  // --- Verificar red antes de continuar ---
-  const canConnect = await testNetwork();
-  if (!canConnect) {
-    throw new Error('❌ [googleSheets] No hay conexión desde Railway hacia googleapis.com (posible bloqueo de red)');
+  // Validar clave y firma ANTES de llamar a Google
+  const keyValid = validatePrivateKey();
+  if (!keyValid) {
+    console.error('❌ [googleSheets] La clave privada parece inválida. Deteniendo.');
+    throw new Error('Clave privada inválida: no se puede firmar JWT.');
   }
 
-  // --- Autenticación con Google ---
-  try {
-    await auth.authorize();
-    console.log('✅ [googleSheets] Autenticación previa OK, ahora llamando a Sheets API...');
-  } catch (authErr) {
-    console.error('❌ [googleSheets] Falla al autorizar con Google:', authErr.message);
-    console.error('🔍 Código:', authErr.code);
-    console.error('📄 Stack:', authErr.stack);
-    throw authErr;
+  // Verificar que el JWT de auth sea aceptado
+  const authValid = await testAuth();
+  if (!authValid) {
+    console.error('❌ [googleSheets] No se pudo autenticar con Google. Revisar JWT o credenciales.');
+    throw new Error('Autenticación con Google fallida.');
   }
 
-  // --- Obtener datos de la hoja ---
+  // Si todo está bien, hacemos la llamada real a Sheets API
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
@@ -100,7 +98,6 @@ async function getSheetData() {
     return res.data.values;
   } catch (err) {
     console.error('❌ [googleSheets] Error al leer la hoja:', err.message);
-    console.error('🔍 Código:', err.code);
     console.error('📄 Stack:', err.stack);
     throw err;
   }
@@ -197,5 +194,5 @@ module.exports = {
   authorizeUser,
   validateToken,
   markTokenUsed,
-  verifyGoogleAuth
+  getSheetData // exportamos para ser usado en index.js
 };
