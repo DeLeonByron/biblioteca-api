@@ -16,10 +16,12 @@ let rawCredentials;
 try {
   rawCredentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
   if (rawCredentials.private_key) {
-    // Asegurar saltos de línea
     rawCredentials.private_key = rawCredentials.private_key.replace(/\\n/g, '\n');
   }
   console.log('✅ [googleSheets] Credenciales parseadas correctamente.');
+  console.log('ℹ️ Client Email:', rawCredentials.client_email);
+  console.log('🔍 Longitud GOOGLE_CREDENTIALS:', process.env.GOOGLE_CREDENTIALS?.length);
+  console.log('🔍 Contiene BEGIN PRIVATE KEY?:', process.env.GOOGLE_CREDENTIALS?.includes('PRIVATE KEY'));
 } catch (err) {
   console.error('❌ [googleSheets] Error al parsear GOOGLE_CREDENTIALS:', err.message);
   throw err;
@@ -35,7 +37,24 @@ const auth = new google.auth.JWT(
 
 const sheets = google.sheets({ version: 'v4', auth });
 
-// --- Verificación temprana de autenticación ---
+// --- Test de conexión inicial (debug) ---
+async function testConnection() {
+  console.log('🔍 [googleSheets] Probando conexión con Google Sheets...');
+  try {
+    await auth.authorize();
+    console.log('✅ [googleSheets] Autenticación con Google exitosa.');
+    const res = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+    console.log('✅ [googleSheets] Conexión a hoja exitosa. Título:', res.data.properties.title);
+  } catch (err) {
+    console.error('❌ [googleSheets] Error probando conexión:', err.message);
+    console.error('📄 Stack:', err.stack);
+  }
+}
+
+// Llamar test al cargar (para debug)
+testConnection();
+
+// --- Verificación de autenticación ---
 async function verifyGoogleAuth() {
   console.log('🔍 [googleSheets] Probando autenticación con Google...');
   try {
@@ -44,6 +63,7 @@ async function verifyGoogleAuth() {
     return { success: true };
   } catch (err) {
     console.error('❌ [googleSheets] Error en auth.authorize():', err.message);
+    console.error('📄 Stack:', err.stack);
     return { success: false, error: err.message };
   }
 }
@@ -51,19 +71,16 @@ async function verifyGoogleAuth() {
 // --- Funciones para manipular Google Sheets ---
 async function getSheetData() {
   console.log('📄 [googleSheets] Leyendo datos de la hoja...');
-  console.log('ℹ️ [googleSheets] SPREADSHEET_ID:', SPREADSHEET_ID);
-  console.log('ℹ️ [googleSheets] Sheet Name:', SHEET_NAME);
-  console.log('ℹ️ [googleSheets] Client Email:', rawCredentials.client_email);
-  console.log('🔍 Longitud GOOGLE_CREDENTIALS:', process.env.GOOGLE_CREDENTIALS?.length);
-  console.log('🔍 Contiene BEGIN PRIVATE KEY?:', process.env.GOOGLE_CREDENTIALS?.includes('PRIVATE KEY'));
-
+  console.log('ℹ️ SPREADSHEET_ID:', SPREADSHEET_ID);
+  console.log('ℹ️ Sheet Name:', SHEET_NAME);
+  console.log('ℹ️ Client Email:', rawCredentials.client_email);
 
   try {
-    // Verificar que el JWT realmente se pueda usar antes de la llamada
     await auth.authorize();
     console.log('✅ [googleSheets] Autenticación previa OK, ahora llamando a Sheets API...');
   } catch (authErr) {
     console.error('❌ [googleSheets] Falla al autorizar con Google:', authErr.message);
+    console.error('📄 Stack:', authErr.stack);
     throw authErr;
   }
 
@@ -76,10 +93,10 @@ async function getSheetData() {
     return res.data.values;
   } catch (err) {
     console.error('❌ [googleSheets] Error al leer la hoja:', err.message);
+    console.error('📄 Stack:', err.stack);
     throw err;
   }
 }
-
 
 async function appendRow(values) {
   console.log('➕ [googleSheets] Insertando nueva fila:', values);
