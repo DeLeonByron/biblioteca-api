@@ -135,19 +135,27 @@ async function appendRow(values) {
 async function checkEmailAccess(email) {
   console.log(`🔍 [googleSheets] Verificando acceso para: ${email}`);
   const data = await getSheetData();
+
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    if (row[0] == email) {
-      const token = row[1];
+    const rowEmail = (row[0] || '').trim();
+
+    if (rowEmail.toLowerCase() === email.toLowerCase()) {
+      const token = (row[1] || '').trim();
       const expira = new Date(row[2]);
-      const estado = row[4] === 'TRUE';
-      const usado = row[5] === 'TRUE';
-      if (!estado || usado || expira < new Date()) {
-        return { success: false, message: 'No autorizado o token expirado' };
-      }
+      const estado = (row[4] || '').trim().toUpperCase() === 'TRUE';
+      const usado = (row[5] || '').trim().toUpperCase() === 'TRUE';
+
+      console.log(`🕒 Expira: ${expira.toISOString()}, Estado: ${estado}, Usado: ${usado}`);
+
+      if (!estado) return { success: false, message: 'Usuario deshabilitado' };
+      if (usado) return { success: false, message: 'Token ya usado' };
+      if (expira < new Date()) return { success: false, message: 'Token expirado' };
+
       return { success: true, token };
     }
   }
+
   return { success: false, message: 'No autorizado' };
 }
 
