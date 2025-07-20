@@ -175,12 +175,14 @@ async function authorizeUser(email) {
   let found = false;
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === email) {
+       console.log(`✏️ [googleSheets] Actualizando token para ${email}`);
       await updateSheet(`${SHEET_NAME}!B${i + 1}:F${i + 1}`, [[token, expiraLocal, '1', 'TRUE', 'FALSE']]);
       found = true;
       break;
     }
   }
   if (!found) {
+    console.log(`➕ [googleSheets] Insertando nuevo usuario: ${email}`);
     await appendRow([email, token, expiraLocal, '1', 'TRUE', 'FALSE']);
   }
   return { success: true, token };
