@@ -1,6 +1,5 @@
 const { google } = require('googleapis');
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -8,26 +7,27 @@ const SHEET_NAME = 'UsuariosTemporales';
 const SPREADSHEET_ID = '16O35yDL1nUwNBMEBYMUYONYS6iAXOdfBRrKr_nLg-PM';
 const SECRET_KEY = process.env.JWT_SECRET || 'bibliotecaVirtual';
 
+// --- Tiempo de expiración del token (en minutos) ---
+const TOKEN_EXPIRATION_MINUTES = 30;
+
 // --- Funciones de fecha ---
 function formatLocalDate(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  // Devuelve fecha y hora en formato "YYYY-MM-DD HH:mm:ss" en hora local de Guatemala
+  return new Date(date).toLocaleString('en-US', {
+    timeZone: 'America/Guatemala',
+    hour12: false,
+  }).replace(',', '');
 }
 
 function parseLocalDate(dateStr) {
-  if (!dateStr) return new Date(0); // Si no hay fecha
-  const [datePart, timePart] = dateStr.split(' ');
+  if (!dateStr) return new Date(0);
+  const [datePart, timePart] = dateStr.trim().split(' ');
   const [year, month, day] = datePart.split('-').map(Number);
   const [hour, minute, second] = timePart.split(':').map(Number);
-  return new Date(year, month - 1, day, hour, minute, second); // Fecha local real
+  return new Date(year, month - 1, day, hour, minute, second);
 }
 
-// --- Credenciales de Google ---
+// --- Configuración de credenciales ---
 if (!process.env.GOOGLE_CREDENTIALS) {
   throw new Error('❌ GOOGLE_CREDENTIALS no está definida en el entorno');
 }
@@ -43,15 +43,11 @@ try {
   throw err;
 }
 
-// --- Crear service-account.json ---
 const credsPath = path.join(__dirname, 'service-account.json');
 fs.writeFileSync(credsPath, JSON.stringify(rawCredentials, null, 2));
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
-const auth = new google.auth.GoogleAuth({
-  keyFile: credsPath,
-  scopes: SCOPES,
-});
+const auth = new google.auth.GoogleAuth({ keyFile: credsPath, scopes: SCOPES });
 
 let sheets;
 async function getSheetsClient() {
@@ -94,10 +90,10 @@ async function appendRow(values) {
   });
 }
 
-// --- Validaciones de negocio ---
+// --- Lógica de negocio ---
 async function checkEmailAccess(email) {
   const data = await getSheetData();
-  const now = new Date();
+  const now = parseLocalDate(formatLocalDate(new Date()));
 
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
@@ -125,8 +121,11 @@ async function checkEmailAccess(email) {
 }
 
 async function authorizeUser(email) {
-  const token = jwt.sign({ sub: email }, SECRET_KEY, { expiresIn: '30m' });
-  const expiraLocal = formatLocalDate(new Date(Date.now() + 30 * 60000)); // 30 min
+  const token = jwt.sign({ sub: email }, SECRET_KEY, {
+    expiresIn: `${TOKEN_EXPIRATION_MINUTES}m`,
+  });
+  const expiraDate = new Date(Date.now() + TOKEN_EXPIRATION_MINUTES * 60000);
+  const expiraLocal = formatLocalDate(expiraDate);
 
   const data = await getSheetData();
   let found = false;
@@ -152,7 +151,7 @@ async function validateToken(token) {
   }
 
   const data = await getSheetData();
-  const now = new Date();
+  const now = parseLocalDate(formatLocalDate(new Date()));
 
   for (let i = 1; i < data.length; i++) {
     if ((data[i][1] || '').trim() === token) {
