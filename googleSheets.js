@@ -137,7 +137,7 @@ async function checkEmailAccess(email) {
   const data = await getSheetData();
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
-    if (row[0] === email) {
+    if (row[0] == email) {
       const token = row[1];
       const expira = new Date(row[2]);
       const estado = row[4] === 'TRUE';
