@@ -135,7 +135,7 @@ async function appendRow(values) {
 async function checkEmailAccess(email) {
   console.log(`🔍 [googleSheets] Verificando acceso para: ${email}`);
   const data = await getSheetData();
-
+  console.log('hoja', data);
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const rowEmail = (row[0] || '').trim();
