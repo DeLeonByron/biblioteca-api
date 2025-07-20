@@ -8,13 +8,18 @@ const SHEET_NAME = 'UsuariosTemporales';
 const SPREADSHEET_ID = '16O35yDL1nUwNBMEBYMUYONYS6iAXOdfBRrKr_nLg-PM';
 const SECRET_KEY = process.env.JWT_SECRET || 'bibliotecaVirtual';
 
-// --- Función para convertir fecha a hora local ---
-function getLocalDate(date = new Date()) {
-  const localOffset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - localOffset);
+// --- Función para convertir fecha a formato local (sin UTC) ---
+function formatLocalDate(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
-// --- Credenciales ---
+// --- Credenciales de Google ---
 if (!process.env.GOOGLE_CREDENTIALS) {
   throw new Error('❌ GOOGLE_CREDENTIALS no está definida en el entorno');
 }
@@ -30,7 +35,7 @@ try {
   throw err;
 }
 
-// --- Generar service-account.json ---
+// --- Generar archivo service-account.json ---
 const credsPath = path.join(__dirname, 'service-account.json');
 fs.writeFileSync(credsPath, JSON.stringify(rawCredentials, null, 2));
 
@@ -49,7 +54,7 @@ async function getSheetsClient() {
   return sheets;
 }
 
-// --- UpdateSheet: ACTUALIZA un rango de la hoja ---
+// --- Actualizar rango en la hoja ---
 async function updateSheet(range, values) {
   const sheetsClient = await getSheetsClient();
   console.log(`✏️ [googleSheets] Actualizando rango ${range} con:`, values);
@@ -71,9 +76,10 @@ async function getSheetData() {
   return res.data.values;
 }
 
-// --- Agregar fila ---
+// --- Agregar fila nueva ---
 async function appendRow(values) {
   const sheetsClient = await getSheetsClient();
+  console.log('➕ [googleSheets] Insertando nueva fila:', values);
   await sheetsClient.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
     range: SHEET_NAME,
@@ -82,10 +88,10 @@ async function appendRow(values) {
   });
 }
 
-// --- Verificar acceso ---
+// --- Verificar acceso de usuario ---
 async function checkEmailAccess(email) {
   const data = await getSheetData();
-  const now = getLocalDate();
+  const now = new Date(); // Hora local
 
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
@@ -93,12 +99,12 @@ async function checkEmailAccess(email) {
 
     if (rowEmail.toLowerCase() === email.toLowerCase()) {
       const token = (row[1] || '').trim();
-      const expira = new Date(row[2]);
+      const expira = new Date(row[2]); // Fecha local almacenada
       const estado = (row[4] || '').trim().toUpperCase() === 'TRUE';
       const usado = (row[5] || '').trim().toUpperCase() === 'TRUE';
 
-      console.log(`🕒 Ahora (local): ${now.toISOString()}`);
-      console.log(`🕒 Expira (UTC): ${expira.toISOString()}`);
+      console.log(`🕒 Ahora (local): ${formatLocalDate(now)}`);
+      console.log(`🕒 Expira (local): ${row[2]}`);
       console.log(`Estado: ${estado}, Usado: ${usado}`);
 
       if (!estado) return { success: false, message: 'Usuario deshabilitado' };
@@ -112,16 +118,16 @@ async function checkEmailAccess(email) {
   return { success: false, message: 'No autorizado' };
 }
 
-// --- Autorizar usuario ---
+// --- Autorizar usuario (genera token y expira en 30m) ---
 async function authorizeUser(email) {
   const token = jwt.sign({ sub: email }, SECRET_KEY, { expiresIn: '30m' });
-  const expiraLocal = getLocalDate(new Date(Date.now() + 30 * 60000)).toISOString();
+  const expiraLocal = formatLocalDate(new Date(Date.now() + 30 * 60000)); // +30 min hora local
 
   const data = await getSheetData();
   let found = false;
 
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === email) {
+    if ((data[i][0] || '').trim().toLowerCase() === email.toLowerCase()) {
       await updateSheet(`${SHEET_NAME}!B${i + 1}:F${i + 1}`, [[token, expiraLocal, '1', 'TRUE', 'FALSE']]);
       found = true;
       break;
@@ -142,10 +148,10 @@ async function validateToken(token) {
   }
 
   const data = await getSheetData();
-  const now = getLocalDate();
+  const now = new Date();
 
   for (let i = 1; i < data.length; i++) {
-    if (data[i][1] === token) {
+    if ((data[i][1] || '').trim() === token) {
       const expira = new Date(data[i][2]);
       const estado = (data[i][4] || '').trim().toUpperCase() === 'TRUE';
       const usado = (data[i][5] || '').trim().toUpperCase() === 'TRUE';
@@ -159,11 +165,11 @@ async function validateToken(token) {
   return { success: false, message: 'Token no encontrado' };
 }
 
-// --- Marcar token usado ---
+// --- Marcar token como usado ---
 async function markTokenUsed(token) {
   const data = await getSheetData();
   for (let i = 1; i < data.length; i++) {
-    if (data[i][1] === token) {
+    if ((data[i][1] || '').trim() === token) {
       await updateSheet(`${SHEET_NAME}!F${i + 1}`, [['TRUE']]);
       return { success: true };
     }
@@ -177,5 +183,6 @@ module.exports = {
   validateToken,
   markTokenUsed,
   getSheetData,
-  updateSheet, // exportado por si lo usas en otros lugares
+  updateSheet,
+  appendRow,
 };
