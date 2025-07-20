@@ -21,6 +21,7 @@ app.post('/solicitar', async (req, res, next) => {
     if (!email) return res.status(400).json({ success: false, message: "Falta el correo" });
 
     const result = await checkEmailAccess(email);
+    console.log('resutl',result);
     if (result.success) return res.json(result);
 
     // Si no tiene acceso, enviar notificación

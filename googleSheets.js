@@ -10,6 +10,12 @@ const SECRET_KEY = process.env.JWT_SECRET || 'bibliotecaVirtual';
 
 console.log('🔍 [googleSheets] Inicializando módulo...');
 
+// --- Función para convertir fecha a hora local ---
+function getLocalDate(date = new Date()) {
+  const localOffset = date.getTimezoneOffset() * 60000; // en milisegundos
+  return new Date(date.getTime() - localOffset); // compensar UTC → local
+}
+
 // --- Verificar GOOGLE_CREDENTIALS ---
 if (!process.env.GOOGLE_CREDENTIALS) {
   throw new Error('❌ GOOGLE_CREDENTIALS no está definida en el entorno');
@@ -86,24 +92,18 @@ async function testAuth() {
   }
 }
 
-// --- Función principal para obtener datos ---
+// --- Obtener datos de la hoja ---
 async function getSheetData() {
   console.log('📄 [googleSheets] Leyendo datos de la hoja...');
   console.log('ℹ️ Spreadsheet ID:', SPREADSHEET_ID);
   console.log('ℹ️ Sheet Name:', SHEET_NAME);
   console.log('ℹ️ Client Email:', rawCredentials.client_email);
 
-  // Validar clave privada primero
   const keyValid = validatePrivateKey();
-  if (!keyValid) {
-    throw new Error('❌ [googleSheets] Clave privada inválida: no se puede firmar JWT.');
-  }
+  if (!keyValid) throw new Error('❌ [googleSheets] Clave privada inválida.');
 
-  // Probar autenticación antes de llamar la API
   const authValid = await testAuth();
-  if (!authValid) {
-    throw new Error('❌ [googleSheets] No se pudo autenticar con Google. Revisar credenciales o JWT.');
-  }
+  if (!authValid) throw new Error('❌ [googleSheets] No se pudo autenticar con Google.');
 
   try {
     const sheetsClient = await getSheetsClient();
@@ -115,12 +115,11 @@ async function getSheetData() {
     return res.data.values;
   } catch (err) {
     console.error('❌ [googleSheets] Error al leer la hoja:', err.message);
-    console.error('📄 Stack:', err.stack);
     throw err;
   }
 }
 
-// --- Funciones adicionales (sin cambios) ---
+// --- Agregar fila ---
 async function appendRow(values) {
   const sheetsClient = await getSheetsClient();
   console.log('➕ [googleSheets] Insertando nueva fila:', values);
@@ -132,10 +131,12 @@ async function appendRow(values) {
   });
 }
 
+// --- Verificar acceso ---
 async function checkEmailAccess(email) {
   console.log(`🔍 [googleSheets] Verificando acceso para: ${email}`);
   const data = await getSheetData();
-  console.log('hoja', data);
+  const now = getLocalDate();
+
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const rowEmail = (row[0] || '').trim();
@@ -146,37 +147,41 @@ async function checkEmailAccess(email) {
       const estado = (row[4] || '').trim().toUpperCase() === 'TRUE';
       const usado = (row[5] || '').trim().toUpperCase() === 'TRUE';
 
-      console.log(`🕒 Expira: ${expira.toISOString()}, Estado: ${estado}, Usado: ${usado}`);
+      console.log(`🕒 Ahora: ${now.toISOString()}`);
+      console.log(`🕒 Expira (UTC): ${expira.toISOString()}`);
+      console.log(`Estado: ${estado}, Usado: ${usado}`);
 
       if (!estado) return { success: false, message: 'Usuario deshabilitado' };
       if (usado) return { success: false, message: 'Token ya usado' };
-      if (expira < new Date()) return { success: false, message: 'Token expirado' };
-
+      if (expira.getTime() <= now.getTime()) {
+        return { success: false, message: 'Token expirado' };
+      }
       return { success: true, token };
     }
   }
-
   return { success: false, message: 'No autorizado' };
 }
 
+// --- Autorizar usuario (token 30 min) ---
 async function authorizeUser(email) {
   console.log(`🔑 [googleSheets] Autorizando usuario: ${email}`);
   const token = jwt.sign({ sub: email }, SECRET_KEY, { expiresIn: '30m' });
-  const expira = new Date(Date.now() + 30 * 60000).toISOString();
-  const data = await getSheetData();
 
+  // Guardamos fecha de expiración en hora local
+  const expiraLocal = getLocalDate(new Date(Date.now() + 30 * 60000)).toISOString();
+  console.log(`🕒 Token válido hasta (local): ${expiraLocal}`);
+
+  const data = await getSheetData();
   let found = false;
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === email) {
-      console.log(`✏️ [googleSheets] Actualizando token para ${email}`);
-      await updateSheet(`${SHEET_NAME}!B${i + 1}:F${i + 1}`, [[token, expira, '1', 'TRUE', 'FALSE']]);
+      await updateSheet(`${SHEET_NAME}!B${i + 1}:F${i + 1}`, [[token, expiraLocal, '1', 'TRUE', 'FALSE']]);
       found = true;
       break;
     }
   }
   if (!found) {
-    console.log(`➕ [googleSheets] Insertando nuevo usuario: ${email}`);
-    await appendRow([email, token, expira, '1', 'TRUE', 'FALSE']);
+    await appendRow([email, token, expiraLocal, '1', 'TRUE', 'FALSE']);
   }
   return { success: true, token };
 }
@@ -188,13 +193,20 @@ async function validateToken(token) {
   } catch {
     return { success: false, message: 'Token inválido o expirado' };
   }
+
   const data = await getSheetData();
+  const now = getLocalDate();
+
   for (let i = 1; i < data.length; i++) {
     if (data[i][1] === token) {
       const expira = new Date(data[i][2]);
-      const estado = data[i][4] === 'TRUE';
-      const usado = data[i][5] === 'TRUE';
-      if (!estado || usado || expira < new Date()) {
+      const estado = (data[i][4] || '').trim().toUpperCase() === 'TRUE';
+      const usado = (data[i][5] || '').trim().toUpperCase() === 'TRUE';
+
+      console.log(`🕒 Ahora: ${now.toISOString()}`);
+      console.log(`🕒 Expira (UTC): ${expira.toISOString()}`);
+
+      if (!estado || usado || expira.getTime() <= now.getTime()) {
         return { success: false, message: 'Token inválido o expirado' };
       }
       return { success: true, email: data[i][0] };
