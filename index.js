@@ -52,6 +52,7 @@ app.get('/validar', async (req, res, next) => {
     if (!token) return res.status(400).json({ success: false, message: "Token requerido" });
 
     const result = await validateToken(token);
+    console.log('resul validar', result);
     res.json(result);
   } catch (error) {
     next(error);
