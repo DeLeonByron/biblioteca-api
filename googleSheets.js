@@ -170,35 +170,34 @@ async function authorizeUser(email, origin) {
 }
 
 async function validateToken(token) {
+  const cleanToken = decodeURIComponent(token).replace(/"/g, '').trim();
 
   try {
-    console.log('toke obtenido', token);
-    jwt.verify(token, SECRET_KEY);
+    // Esperar a que se verifique el token de forma asíncrona
+    await verifyTokenAsync(cleanToken, SECRET_KEY);
   } catch (err) {
     console.error('JWT Verify Error:', err);
-    return { success: false, message: 'Token inválido o expirado error' };
+    return { success: false, message: 'Token inválido o dañado' };
   }
-
-
+  
   const data = await getSheetData();
   const now = getNowGuatemala();
 
-  console.log('now', now);
-
   for (let i = 1; i < data.length; i++) {
-    if ((data[i][1] || '').trim() === token) {
+    if ((data[i][1] || '').trim() === cleanToken) {
       const expira = parseLocalDate(data[i][2]);
       const estado = (data[i][4] || '').trim().toUpperCase() === 'TRUE';
       const usado = (data[i][5] || '').trim().toUpperCase() === 'TRUE';
 
       if (!estado || usado || expira.getTime() <= now.getTime()) {
-        return { success: false, message: 'Token inválido o expirado' };
+        return { success: false, message: 'Token expirado o inválido' };
       }
-      return { success: true, email: data[i][0] };
+      return { success: true, email: data[i][0], token: cleanToken };
     }
   }
   return { success: false, message: 'Token no encontrado' };
 }
+
 
 async function markTokenUsed(token) {
   const data = await getSheetData();
@@ -210,6 +209,16 @@ async function markTokenUsed(token) {
   }
   return { success: false, message: 'Token no encontrado' };
 }
+
+function verifyTokenAsync(token, secret) {
+  return new Promise((resolve, reject) => {
+    jwt.verify(token, secret, (err, decoded) => {
+      if (err) return reject(err);
+      resolve(decoded);
+    });
+  });
+}
+
 
 module.exports = {
   TOKEN_EXPIRATION_MINUTES,
