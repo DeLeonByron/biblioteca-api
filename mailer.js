@@ -19,7 +19,7 @@ async function sendAdminNotification(email) {
     El usuario ${email} ha solicitado acceso temporal a la biblioteca.
 
     Autorizar acceso:
-    <p><a href="${message}" target="_blank">Autorizar</a></p>
+    <p><a href="${acceso}" target="_blank">Autorizar</a></p>
   `;
 
   try {
