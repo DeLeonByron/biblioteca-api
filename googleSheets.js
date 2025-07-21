@@ -4,13 +4,12 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 const { sendUserNotification } = require('./mailer');
+// --- Tiempo de expiración del token (en minutos) ---
+const TOKEN_EXPIRATION_MINUTES = 5;
 
 const SHEET_NAME = 'UsuariosTemporales';
 const SPREADSHEET_ID = '16O35yDL1nUwNBMEBYMUYONYS6iAXOdfBRrKr_nLg-PM';
 const SECRET_KEY = process.env.JWT_SECRET || 'bibliotecaVirtual';
-
-// --- Tiempo de expiración del token (en minutos) ---
-const TOKEN_EXPIRATION_MINUTES = 5;
 
 // --- Funciones de fecha ---
 function formatLocalDate(date = new Date()) {
@@ -137,9 +136,7 @@ async function checkEmailAccess(email) {
 }
 
 async function authorizeUser(email, origin) {
-  // const token = jwt.sign({ sub: email }, SECRET_KEY, {
-  //   expiresIn: `${TOKEN_EXPIRATION_MINUTES}m`,
-  // });
+
   const token = jwt.sign({ sub: email }, SECRET_KEY); // Sin expiresIn
   const expiraDate = new Date(Date.now() + TOKEN_EXPIRATION_MINUTES * 60000);
   const expiraLocal = formatLocalDate(expiraDate);
@@ -162,7 +159,7 @@ async function authorizeUser(email, origin) {
   const baseUrl =
     origin && origin.includes('localhost')
       ? 'http://localhost:4200'
-      : origin || 'https://biblioteca-virtual';
+      : origin || 'http://localhost:4200';
 
   const accessUrl = `${baseUrl}/validartoken/${token}`;
 
