@@ -214,6 +214,7 @@ async function markTokenUsed(token) {
 }
 
 module.exports = {
+  TOKEN_EXPIRATION_MINUTES,
   checkEmailAccess,
   authorizeUser,
   validateToken,

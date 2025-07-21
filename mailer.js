@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { TOKEN_EXPIRATION_MINUTES } = require('./googleSheets'); // Importamos la constante
 
 const ADMIN_EMAIL = 'byron16garcia@gmail.com';
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD; // App Password de Google
@@ -15,11 +16,10 @@ const transporter = nodemailer.createTransport({
 // --- Función para notificar al administrador ---
 async function sendAdminNotification(email) {
   const acceso = `https://biblioteca-api-production-e0fd.up.railway.app/autorizar?email=${encodeURIComponent(email)}`;
-  const message = `
-    El usuario ${email} ha solicitado acceso temporal a la biblioteca.
-
-    Autorizar acceso:
-    <p><a href="${acceso}" target="_blank">Autorizar</a></p>
+  const messageHtml = `
+    <p>El usuario <strong>${email}</strong> ha solicitado acceso temporal a la biblioteca.</p>
+    <p>Para autorizar el acceso, haz clic aquí:</p>
+    <p><a href="${acceso}" target="_blank">Autorizar acceso</a></p>
   `;
 
   try {
@@ -27,7 +27,8 @@ async function sendAdminNotification(email) {
       from: ADMIN_EMAIL,
       to: ADMIN_EMAIL,
       subject: 'Solicitud de acceso temporal',
-      text: message,
+      text: `El usuario ${email} ha solicitado acceso temporal. Autorizar en: ${acceso}`,
+      html: messageHtml, // Enviamos HTML
     });
     console.log(`✅ Notificación enviada al administrador para ${email}`);
   } catch (err) {
@@ -36,26 +37,28 @@ async function sendAdminNotification(email) {
   }
 }
 
+// --- Función para notificar al usuario ---
 async function sendUserNotification(userEmail, accessUrl) {
-
-  const message = `
-      <p>Hola,</p>
-      <p>Tu acceso temporal a la Biblioteca Virtual ha sido aprobado.</p>
-      <p>Puedes ingresar usando el siguiente enlace (válido por ${TOKEN_EXPIRATION_MINUTES} minutos):</p>
-      <p><a href="${accessUrl}" target="_blank">LINK ACCESO TEMPORAL</a></p>
-      <p>Gracias,</p>
-      <p>Biblioteca Virtual</p>`;
+  const messageHtml = `
+    <p>Hola,</p>
+    <p>Tu acceso temporal a la Biblioteca Virtual ha sido aprobado.</p>
+    <p>Puedes ingresar usando el siguiente enlace (válido por <strong>${TOKEN_EXPIRATION_MINUTES} minutos</strong>):</p>
+    <p><a href="${accessUrl}" target="_blank">LINK DE ACCESO TEMPORAL</a></p>
+    <p>Gracias,</p>
+    <p><strong>Biblioteca Virtual</strong></p>
+  `;
 
   try {
     await transporter.sendMail({
       from: ADMIN_EMAIL,
       to: userEmail,
       subject: 'Autorización de acceso temporal',
-      text: message,
+      text: `Tu acceso temporal a la Biblioteca Virtual ha sido aprobado. Enlace válido por ${TOKEN_EXPIRATION_MINUTES} minutos: ${accessUrl}`,
+      html: messageHtml, // Enviamos HTML
     });
     console.log(`✅ Correo enviado al solicitante: ${userEmail}`);
   } catch (err) {
-    console.error('❌ Error al enviar correo al:', err.message);
+    console.error('❌ Error al enviar correo al usuario:', err.message);
     throw err;
   }
 }
