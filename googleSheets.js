@@ -172,6 +172,7 @@ async function authorizeUser(email, origin) {
 async function validateToken(token) {
 
   try {
+    console.log('toke obtenido', token);
     jwt.verify(token, SECRET_KEY);
   } catch (err) {
     console.error('JWT Verify Error:', err);
