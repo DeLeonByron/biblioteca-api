@@ -1,3 +1,4 @@
+// googleSheets.js
 const { google } = require('googleapis');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
@@ -83,6 +84,7 @@ async function updateSheet(range, values) {
   });
 }
 
+// Obtener datos de la hoja
 async function getSheetData() {
   const sheetsClient = await getSheetsClient();
   const res = await sheetsClient.spreadsheets.values.get({
