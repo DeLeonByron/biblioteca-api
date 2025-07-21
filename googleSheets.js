@@ -12,11 +12,17 @@ const TOKEN_EXPIRATION_MINUTES = 30;
 
 // --- Funciones de fecha ---
 function formatLocalDate(date = new Date()) {
-  // Devuelve fecha y hora en formato "YYYY-MM-DD HH:mm:ss" en hora local de Guatemala
-  return new Date(date).toLocaleString('en-US', {
-    timeZone: 'America/Guatemala',
-    hour12: false,
-  }).replace(',', '');
+  // Convierte siempre a hora local de Guatemala en formato YYYY-MM-DD HH:mm:ss
+  const guatemalaTime = new Date(
+    date.toLocaleString('en-US', { timeZone: 'America/Guatemala' })
+  );
+  const year = guatemalaTime.getFullYear();
+  const month = String(guatemalaTime.getMonth() + 1).padStart(2, '0');
+  const day = String(guatemalaTime.getDate()).padStart(2, '0');
+  const hours = String(guatemalaTime.getHours()).padStart(2, '0');
+  const minutes = String(guatemalaTime.getMinutes()).padStart(2, '0');
+  const seconds = String(guatemalaTime.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
 function parseLocalDate(dateStr) {
@@ -25,6 +31,13 @@ function parseLocalDate(dateStr) {
   const [year, month, day] = datePart.split('-').map(Number);
   const [hour, minute, second] = timePart.split(':').map(Number);
   return new Date(year, month - 1, day, hour, minute, second);
+}
+
+// Devuelve un objeto Date con la hora actual de Guatemala
+function getNowGuatemala() {
+  return new Date(
+    new Date().toLocaleString('en-US', { timeZone: 'America/Guatemala' })
+  );
 }
 
 // --- Configuración de credenciales ---
@@ -93,7 +106,7 @@ async function appendRow(values) {
 // --- Lógica de negocio ---
 async function checkEmailAccess(email) {
   const data = await getSheetData();
-  const now = parseLocalDate(formatLocalDate(new Date()));
+  const now = getNowGuatemala();
 
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
@@ -105,8 +118,8 @@ async function checkEmailAccess(email) {
       const estado = (row[4] || '').trim().toUpperCase() === 'TRUE';
       const usado = (row[5] || '').trim().toUpperCase() === 'TRUE';
 
-      console.log(`🕒 Ahora (local): ${formatLocalDate(now)}`);
-      console.log(`🕒 Expira (local): ${row[2]}`);
+      console.log(`🕒 Ahora (GT): ${formatLocalDate(now)}`);
+      console.log(`🕒 Expira (GT): ${row[2]}`);
       console.log(`Estado: ${estado}, Usado: ${usado}`);
 
       if (!estado) return { success: false, message: 'Usuario deshabilitado' };
@@ -151,7 +164,7 @@ async function validateToken(token) {
   }
 
   const data = await getSheetData();
-  const now = parseLocalDate(formatLocalDate(new Date()));
+  const now = getNowGuatemala();
 
   for (let i = 1; i < data.length; i++) {
     if ((data[i][1] || '').trim() === token) {
