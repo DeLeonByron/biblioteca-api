@@ -34,11 +34,21 @@ app.post('/solicitar', async (req, res, next) => {
 
 // GET: Autorizar usuario y generar token
 app.get('/autorizar', async (req, res, next) => {
+  // try {
+  //   const { email } = req.query;
+  //   if (!email) return res.status(400).json({ success: false, message: "Correo requerido" });
+
+  //   const result = await authorizeUser(email);
+  //   res.json(result);
+  // } catch (error) {
+  //   next(error);
+  // }
   try {
     const { email } = req.query;
+    const origin = req.headers.origin || ''; // Detectar de dónde viene
     if (!email) return res.status(400).json({ success: false, message: "Correo requerido" });
 
-    const result = await authorizeUser(email);
+    const result = await authorizeUser(email, origin);
     res.json(result);
   } catch (error) {
     next(error);

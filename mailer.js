@@ -14,11 +14,12 @@ const transporter = nodemailer.createTransport({
 
 // --- Función para notificar al administrador ---
 async function sendAdminNotification(email) {
+  const acceso = `https://biblioteca-api-production-e0fd.up.railway.app/autorizar?email=${encodeURIComponent(email)}`;
   const message = `
     El usuario ${email} ha solicitado acceso temporal a la biblioteca.
 
     Autorizar acceso:
-    https://biblioteca-api-production-e0fd.up.railway.app/autorizar?email=${encodeURIComponent(email)}
+    <p><a href="${message}" target="_blank">Autorizar</a></p>
   `;
 
   try {
@@ -35,4 +36,28 @@ async function sendAdminNotification(email) {
   }
 }
 
-module.exports = { sendAdminNotification };
+async function sendUserNotification(userEmail, accessUrl) {
+
+  const message = `
+      <p>Hola,</p>
+      <p>Tu acceso temporal a la Biblioteca Virtual ha sido aprobado.</p>
+      <p>Puedes ingresar usando el siguiente enlace (válido por ${TOKEN_EXPIRATION_MINUTES} minutos):</p>
+      <p><a href="${accessUrl}" target="_blank">LINK ACCESO TEMPORAL</a></p>
+      <p>Gracias,</p>
+      <p>Biblioteca Virtual</p>`;
+
+  try {
+    await transporter.sendMail({
+      from: ADMIN_EMAIL,
+      to: userEmail,
+      subject: 'Autorización de acceso temporal',
+      text: message,
+    });
+    console.log(`✅ Correo enviado al solicitante: ${userEmail}`);
+  } catch (err) {
+    console.error('❌ Error al enviar correo al:', err.message);
+    throw err;
+  }
+}
+
+module.exports = { sendAdminNotification, sendUserNotification };

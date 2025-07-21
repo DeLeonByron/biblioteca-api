@@ -3,13 +3,14 @@ const { google } = require('googleapis');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
+const { sendUserNotification } = require('./mailer');
 
 const SHEET_NAME = 'UsuariosTemporales';
 const SPREADSHEET_ID = '16O35yDL1nUwNBMEBYMUYONYS6iAXOdfBRrKr_nLg-PM';
 const SECRET_KEY = process.env.JWT_SECRET || 'bibliotecaVirtual';
 
 // --- Tiempo de expiración del token (en minutos) ---
-const TOKEN_EXPIRATION_MINUTES = 30;
+const TOKEN_EXPIRATION_MINUTES = 5;
 
 // --- Funciones de fecha ---
 function formatLocalDate(date = new Date()) {
@@ -135,7 +136,7 @@ async function checkEmailAccess(email) {
   return { success: false, message: 'No autorizado' };
 }
 
-async function authorizeUser(email) {
+async function authorizeUser(email, origin) {
   // const token = jwt.sign({ sub: email }, SECRET_KEY, {
   //   expiresIn: `${TOKEN_EXPIRATION_MINUTES}m`,
   // });
@@ -156,11 +157,23 @@ async function authorizeUser(email) {
   if (!found) {
     await appendRow([email, token, expiraLocal, '1', 'TRUE', 'FALSE']);
   }
-  return { success: true, token };
+
+    // Construir la URL según si es local o dominio real
+  const baseUrl =
+    origin && origin.includes('localhost')
+      ? 'http://localhost:4200'
+      : origin || 'https://biblioteca-virtual';
+
+  const accessUrl = `${baseUrl}/validartoken/${token}`;
+
+  // Enviar correo al usuario con el enlace
+  await sendUserNotification(email, accessUrl);
+
+  return { success: true, token, url: accessUrl };
 }
 
 async function validateToken(token) {
-  
+
   try {
     jwt.verify(token, SECRET_KEY);
   } catch (err) {
