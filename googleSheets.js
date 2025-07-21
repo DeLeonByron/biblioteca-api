@@ -162,11 +162,13 @@ async function validateToken(token) {
   try {
     jwt.verify(token, SECRET_KEY);
   } catch {
-    return { success: false, message: 'Token inválido o expirado' };
+    return { success: false, message: 'Token inválido o expirado error' };
   }
 
   const data = await getSheetData();
   const now = getNowGuatemala();
+
+  console.log('now', now);
 
   for (let i = 1; i < data.length; i++) {
     if ((data[i][1] || '').trim() === token) {
