@@ -136,9 +136,10 @@ async function checkEmailAccess(email) {
 }
 
 async function authorizeUser(email) {
-  const token = jwt.sign({ sub: email }, SECRET_KEY, {
-    expiresIn: `${TOKEN_EXPIRATION_MINUTES}m`,
-  });
+  // const token = jwt.sign({ sub: email }, SECRET_KEY, {
+  //   expiresIn: `${TOKEN_EXPIRATION_MINUTES}m`,
+  // });
+  const token = jwt.sign({ sub: email }, SECRET_KEY); // Sin expiresIn
   const expiraDate = new Date(Date.now() + TOKEN_EXPIRATION_MINUTES * 60000);
   const expiraLocal = formatLocalDate(expiraDate);
 
@@ -159,11 +160,14 @@ async function authorizeUser(email) {
 }
 
 async function validateToken(token) {
+  
   try {
     jwt.verify(token, SECRET_KEY);
-  } catch {
+  } catch (err) {
+    console.error('JWT Verify Error:', err);
     return { success: false, message: 'Token inválido o expirado error' };
   }
+
 
   const data = await getSheetData();
   const now = getNowGuatemala();
