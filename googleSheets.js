@@ -159,7 +159,7 @@ async function authorizeUser(email, origin) {
   const baseUrl =
     origin && origin.includes('localhost')
       ? 'http://localhost:4200'
-      : origin || 'http://localhost:4200';
+      : origin || 'http://biblioteca-virtual.com';
 
   const accessUrl = `${baseUrl}/validartoken/${token}`;
 
