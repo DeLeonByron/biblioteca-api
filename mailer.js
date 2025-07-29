@@ -1,7 +1,7 @@
 const nodemailer = require('nodemailer');
 const { TOKEN_EXPIRATION_MINUTES } = require('./googleSheets'); // Importamos la constante
 
-const ADMIN_EMAIL = 'byron16garcia@gmail.com';
+const ADMIN_EMAIL = 'postgradosinternacionalesgt@gmail.com';
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD; // App Password de Google
 
 // --- Configuración del transporte de correo ---
@@ -42,7 +42,7 @@ async function sendUserNotification(userEmail, accessUrl) {
   const messageHtml = `
     <p>Hola,</p>
     <p>Tu acceso temporal a la Biblioteca Virtual ha sido aprobado.</p>
-    <p>Puedes ingresar usando el siguiente enlace (válido por <strong>${TOKEN_EXPIRATION_MINUTES} minutos</strong>):</p>
+    <p>Puedes ingresar usando el siguiente enlace:</p>
     <p><a href="${accessUrl}" target="_blank">LINK DE ACCESO TEMPORAL</a></p>
     <p>Gracias,</p>
     <p><strong>Biblioteca Virtual</strong></p>
