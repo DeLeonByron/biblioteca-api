@@ -9,7 +9,7 @@ const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: ADMIN_EMAIL,
-    pass: GMAIL_APP_PASSWORD, // Aquí va la App Password, no tu clave real
+    pass: GMAIL_APP_PASSWORD, // Aquí va la App Password, no tu clave real configurado en raywal
   },
 });
 
